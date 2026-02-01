@@ -28,6 +28,7 @@ export interface Character {
   favorability: number; // affection/bond level
   uncapMaterial: UncapMaterialType; // which material this character needs
   skills?: Skill[]; // optional character skills
+  skillLevels?: Record<string, number>; // per-skill level tracking
 }
 
 export interface CharacterInventory {
@@ -104,6 +105,28 @@ export interface UncapMaterialInventory {
   fragment: number;
   tome: number;
   rune: number;
+}
+
+// Skill Upgrade Materials
+export type SkillMaterialType = 'spark' | 'core' | 'prism';
+
+export interface SkillMaterial {
+  id: SkillMaterialType;
+  name: string;
+  icon: string;
+  description: string;
+}
+
+export const SKILL_MATERIALS: Record<SkillMaterialType, SkillMaterial> = {
+  spark: { id: 'spark', name: 'Skill Spark', icon: '✨', description: 'Basic energy used to train skills' },
+  core: { id: 'core', name: 'Skill Core', icon: '💠', description: 'Condensed power for advanced skills' },
+  prism: { id: 'prism', name: 'Skill Prism', icon: '🔶', description: 'Rare prism for elite skill mastery' },
+};
+
+export interface SkillMaterialInventory {
+  spark: number;
+  core: number;
+  prism: number;
 }
 
 // Character Skills Database

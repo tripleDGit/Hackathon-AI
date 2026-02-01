@@ -1,6 +1,6 @@
 import React from 'react';
 import { Character } from '@/types/character.types';
-import { getCharacterStats } from '@/services/character.service';
+import { getCharacterStats, getSkillLevel, getMaxSkillLevel } from '@/services/character.service';
 
 interface CharacterDisplayProps {
   character: Character;
@@ -10,8 +10,10 @@ interface CharacterDisplayProps {
 
 const CharacterDisplay: React.FC<CharacterDisplayProps> = ({ character, compact = false, onShowCharacterSelection }) => {
   const stats = getCharacterStats(character);
+  const maxSkillLevel = getMaxSkillLevel(character);
 
   const expPercentage = Math.min(100, (character.experience / character.nextLevelExp) * 100);
+  const skills = character.skills ?? [];
 
   if (compact) {
     return (
@@ -114,11 +116,11 @@ const CharacterDisplay: React.FC<CharacterDisplayProps> = ({ character, compact 
       </div>
 
       {/* Skills Section */}
-      {character.skills && character.skills.length > 0 && (
-        <div className="mb-4">
-          <h3 className="font-bold text-gray-800 mb-2 text-sm">Skills</h3>
+      <div className="mb-4">
+        <h3 className="font-bold text-gray-800 mb-2 text-sm">Skills</h3>
+        {skills.length > 0 ? (
           <div className="space-y-2">
-            {character.skills.map((skill) => (
+            {skills.map((skill) => (
               <div key={skill.id} className={`p-2 rounded-lg text-xs border-2 ${
                 skill.type === 'passive' 
                   ? 'bg-gray-50 border-gray-300' 
@@ -127,6 +129,7 @@ const CharacterDisplay: React.FC<CharacterDisplayProps> = ({ character, compact 
                 <div className="font-semibold text-gray-800 flex items-center gap-2">
                   <span>{skill.icon}</span>
                   {skill.name}
+                  <span className="text-[10px] text-gray-500">Lv.{getSkillLevel(character, skill.id)}/{maxSkillLevel}</span>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                     skill.type === 'passive' 
                       ? 'bg-gray-300 text-gray-700' 
@@ -140,8 +143,10 @@ const CharacterDisplay: React.FC<CharacterDisplayProps> = ({ character, compact 
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-xs text-gray-500 italic">No skills unlocked yet.</div>
+        )}
+      </div>
 
       {/* View Details Button */}
       <button

@@ -261,6 +261,7 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                     </div>
                 )}
 
+
                 {/* Mission Progress Notification */}
                 {pointsEarned > 0 && (
                     <div className="mb-6 bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 border-yellow-300 rounded-xl p-5">

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Character, BookInventory, BookTier, BOOK_DATA, UncapMaterialInventory, UNCAP_MATERIALS } from '@/types/character.types';
-import { useBook as applyBook, getBookInventory, isAtLevelCap, getLevelCap, getUncapRequirements, uncapCharacter, getUncapMaterialInventory, fixStuckCharacterLevels, getBookCost, getUncapCost } from '@/services/character.service';
+import { Character, BookInventory, BookTier, BOOK_DATA, UncapMaterialInventory, UNCAP_MATERIALS, SkillMaterialInventory, SKILL_MATERIALS } from '@/types/character.types';
+import { useBook as applyBook, getBookInventory, isAtLevelCap, getLevelCap, getUncapRequirements, uncapCharacter, getUncapMaterialInventory, fixStuckCharacterLevels, getBookCost, getUncapCost, getSkillMaterialInventory, levelUpSkill, getSkillLevel, getMaxSkillLevel, getSkillUpgradeCost, getCharacterById } from '@/services/character.service';
 import { loadUserProgress } from '@/services/missions.service';
 
 interface BookUsageUIProps {
@@ -12,6 +12,7 @@ interface BookUsageUIProps {
 const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook }) => {
   const [bookInventory, setBookInventory] = useState<BookInventory>(getBookInventory());
   const [materialInventory, setMaterialInventory] = useState<UncapMaterialInventory>(getUncapMaterialInventory());
+  const [skillMaterialInventory, setSkillMaterialInventory] = useState<SkillMaterialInventory>(getSkillMaterialInventory());
   const [selectedTier, setSelectedTier] = useState<BookTier | null>(null);
   const [bookAmount, setBookAmount] = useState<number>(1);
   const [showAnimation, setShowAnimation] = useState(false);
@@ -28,6 +29,8 @@ const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook
   } | null>(null);
 
   const userProgress = loadUserProgress();
+  const skillCharacter = getCharacterById(character.id) ?? character;
+  const maxSkillLevel = getMaxSkillLevel(skillCharacter);
   const atLevelCap = isAtLevelCap(character);
   const levelCap = getLevelCap(character.ascensionLevel);
   const canUncap = character.ascensionLevel < 9;
@@ -150,6 +153,17 @@ const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook
       totalCost,
     });
     setShowConfirmation(true);
+  };
+
+  const handleSkillLevelUp = (skillId: string) => {
+    const result = levelUpSkill(character.id, skillId);
+    if (!result.success) {
+      setErrorMessage(result.error || 'Failed to upgrade skill');
+      setTimeout(() => setErrorMessage(null), 3000);
+      return;
+    }
+
+    setSkillMaterialInventory(getSkillMaterialInventory());
   };
 
   const handleConfirmUpgrade = () => {
@@ -360,9 +374,9 @@ const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook
             )}
 
             {/* Skills Display */}
-            {character.skills && character.skills.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-indigo-300">
-                <h4 className="text-xs font-bold text-gray-800 mb-2">🎯 Skills</h4>
+            <div className="mt-3 pt-3 border-t border-indigo-300">
+              <h4 className="text-xs font-bold text-gray-800 mb-2">🎯 Skills</h4>
+              {character.skills && character.skills.length > 0 ? (
                 <div className="space-y-2">
                   {character.skills.map((skill) => (
                     <div key={skill.id} className={`p-2 rounded text-xs border ${
@@ -373,6 +387,7 @@ const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook
                       <div className="font-semibold text-gray-800 flex items-center gap-2">
                         <span>{skill.icon}</span>
                         {skill.name}
+                        <span className="text-[10px] text-gray-500">Lv.{getSkillLevel(skillCharacter, skill.id)}/{maxSkillLevel}</span>
                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded ml-auto ${
                           skill.type === 'passive' 
                             ? 'bg-gray-300 text-gray-700' 
@@ -385,9 +400,86 @@ const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="text-xs text-gray-500 italic">No skills unlocked yet.</div>
+              )}
+            </div>
           </div>
+
+          {/* Skill Training Section */}
+          {skillCharacter.skills && skillCharacter.skills.length > 0 && (
+            <div className="mb-6 bg-gradient-to-br from-amber-50 to-orange-100 rounded-xl p-4 border-2 border-orange-300">
+              <h3 className="font-bold text-orange-900 mb-3 flex items-center gap-2">
+                <span className="text-xl">✨</span>
+                Skill Training
+                <span className="ml-auto text-xs text-orange-700">Max Lv.{maxSkillLevel} (cap {getLevelCap(skillCharacter.ascensionLevel)})</span>
+              </h3>
+
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-white rounded-lg p-2 text-center border border-orange-200">
+                  <div className="text-xl">{SKILL_MATERIALS.spark.icon}</div>
+                  <div className="text-sm font-bold text-orange-700">{skillMaterialInventory.spark}</div>
+                  <div className="text-[10px] text-gray-600">{SKILL_MATERIALS.spark.name}</div>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center border border-orange-200">
+                  <div className="text-xl">{SKILL_MATERIALS.core.icon}</div>
+                  <div className="text-sm font-bold text-orange-700">{skillMaterialInventory.core}</div>
+                  <div className="text-[10px] text-gray-600">{SKILL_MATERIALS.core.name}</div>
+                </div>
+                <div className="bg-white rounded-lg p-2 text-center border border-orange-200">
+                  <div className="text-xl">{SKILL_MATERIALS.prism.icon}</div>
+                  <div className="text-sm font-bold text-orange-700">{skillMaterialInventory.prism}</div>
+                  <div className="text-[10px] text-gray-600">{SKILL_MATERIALS.prism.name}</div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {skillCharacter.skills.map((skill) => {
+                  const currentLevel = getSkillLevel(skillCharacter, skill.id);
+                  const nextLevel = currentLevel + 1;
+                  const isMaxed = currentLevel >= maxSkillLevel;
+                  const cost = getSkillUpgradeCost(nextLevel);
+                  const hasMaterials = skillMaterialInventory[cost.material] >= cost.amount;
+
+                  return (
+                    <div key={skill.id} className="bg-white rounded-lg p-3 border border-orange-200">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{skill.icon}</span>
+                        <div className="flex-1">
+                          <div className="font-semibold text-gray-800">
+                            {skill.name}
+                            <span className="ml-2 text-xs text-gray-500">Lv.{currentLevel}/{maxSkillLevel}</span>
+                          </div>
+                          <div className="text-xs text-gray-600">{skill.description}</div>
+                        </div>
+                        <button
+                          onClick={() => handleSkillLevelUp(skill.id)}
+                          disabled={isMaxed || !hasMaterials}
+                          className={`px-3 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
+                            isMaxed
+                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                              : !hasMaterials
+                                ? 'bg-orange-100 text-orange-400 cursor-not-allowed'
+                                : 'bg-orange-500 text-white hover:bg-orange-600'
+                          }`}
+                        >
+                          {isMaxed ? 'Maxed' : 'Level Up'}
+                        </button>
+                      </div>
+                      {!isMaxed && (
+                        <div className="mt-2 text-xs text-gray-600 flex items-center gap-2">
+                          <span>Cost:</span>
+                          <span className="font-semibold text-orange-700">
+                            {SKILL_MATERIALS[cost.material].icon} {cost.amount} {SKILL_MATERIALS[cost.material].name}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Uncap Section */}
           {atLevelCap && canUncap && (

@@ -193,6 +193,6 @@ export const calculateBattleRewards = (
         points: basePoints * multiplier,
         gems: baseGems * multiplier,
         primogems,
-        books
+        books,
     };
 };

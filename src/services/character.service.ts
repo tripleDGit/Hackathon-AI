@@ -1,5 +1,66 @@
-import { Character, CharacterInventory, GachaResult, Rarity, GachaCurrency, BookInventory, BookTier, BOOK_DATA, UncapMaterialType, UncapMaterialInventory, CHARACTER_SKILLS } from '@/types/character.types';
+import { Character, CharacterInventory, GachaResult, Rarity, GachaCurrency, BookInventory, BookTier, BOOK_DATA, UncapMaterialType, UncapMaterialInventory, CHARACTER_SKILLS, SkillMaterialInventory, SkillMaterialType, SKILL_MATERIALS, Skill } from '@/types/character.types';
 import { loadUserProgress, saveUserProgress } from '@/services/missions.service';
+
+const getSkillKeyFromName = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+const ensureSkillLevels = (character: Character, skills: Skill[]): { character: Character; updated: boolean } => {
+  if (skills.length === 0) {
+    return { character, updated: false };
+  }
+
+  const currentLevels = character.skillLevels ?? {};
+  let updated = false;
+  const nextLevels: Record<string, number> = { ...currentLevels };
+
+  skills.forEach((skill) => {
+    if (nextLevels[skill.id] == null) {
+      nextLevels[skill.id] = 1;
+      updated = true;
+    }
+  });
+
+  if (!updated && character.skillLevels) {
+    return { character, updated: false };
+  }
+
+  return { character: { ...character, skillLevels: nextLevels }, updated: true };
+};
+
+const hydrateInventorySkills = (inventory: CharacterInventory): { inventory: CharacterInventory; updated: boolean } => {
+  let updated = false;
+  const characters = inventory.characters.map((character) => {
+    if (character.skills && character.skills.length > 0) {
+      const ensured = ensureSkillLevels(character, character.skills);
+      if (ensured.updated) {
+        updated = true;
+      }
+      return ensured.character;
+    }
+
+    const skillKey = getSkillKeyFromName(character.name);
+    const skills = CHARACTER_SKILLS[skillKey];
+    if (skills) {
+      updated = true;
+      const ensured = ensureSkillLevels({ ...character, skills }, skills);
+      if (ensured.updated) {
+        updated = true;
+      }
+      return ensured.character;
+    }
+
+    return character;
+  });
+
+  if (!updated) {
+    return { inventory, updated };
+  }
+
+  return { inventory: { ...inventory, characters }, updated };
+};
 
 // Template characters for gacha pool
 const CHARACTER_POOL: Character[] = [
@@ -119,7 +180,12 @@ const GACHA_RATES = {
 export const getCharacterInventory = (): CharacterInventory => {
   const stored = localStorage.getItem('character_inventory');
   if (stored) {
-    return JSON.parse(stored);
+    const parsed: CharacterInventory = JSON.parse(stored);
+    const hydrated = hydrateInventorySkills(parsed);
+    if (hydrated.updated) {
+      saveCharacterInventory(hydrated.inventory);
+    }
+    return hydrated.inventory;
   }
 
   // Initialize with starter character (Mathematica with sprite)
@@ -159,6 +225,37 @@ export const getGachaCurrency = (): GachaCurrency => {
 
 export const saveGachaCurrency = (currency: GachaCurrency) => {
   localStorage.setItem('gacha_currency', JSON.stringify(currency));
+};
+
+// Skill material inventory management
+export const getSkillMaterialInventory = (): SkillMaterialInventory => {
+  const stored = localStorage.getItem('skill_material_inventory');
+  if (stored) {
+    return JSON.parse(stored);
+  }
+
+  const inventory: SkillMaterialInventory = {
+    spark: 6,
+    core: 2,
+    prism: 0,
+  };
+
+  saveSkillMaterialInventory(inventory);
+  return inventory;
+};
+
+export const saveSkillMaterialInventory = (inventory: SkillMaterialInventory) => {
+  localStorage.setItem('skill_material_inventory', JSON.stringify(inventory));
+};
+
+export const addSkillMaterials = (materials: Partial<SkillMaterialInventory>) => {
+  const inventory = getSkillMaterialInventory();
+  const updated: SkillMaterialInventory = {
+    spark: inventory.spark + (materials.spark ?? 0),
+    core: inventory.core + (materials.core ?? 0),
+    prism: inventory.prism + (materials.prism ?? 0),
+  };
+  saveSkillMaterialInventory(updated);
 };
 
 // Add premium currency (primogems)
@@ -222,6 +319,62 @@ export const addUncapMaterial = (materialType: UncapMaterialType, amount: number
 export const getLevelCap = (ascensionLevel: number): number => {
   // Level caps: 10, 20, 30, 40, 50, 60, 70, 80, 90, 100
   return (ascensionLevel + 1) * 10;
+};
+
+// Skill level cap based on character level cap
+export const getMaxSkillLevel = (character: Character): number => {
+  const levelCap = getLevelCap(character.ascensionLevel);
+  return Math.max(1, Math.min(10, Math.floor(levelCap / 10)));
+};
+
+export const getSkillLevel = (character: Character, skillId: string): number => {
+  return character.skillLevels?.[skillId] ?? 1;
+};
+
+export const getSkillUpgradeCost = (nextLevel: number): { material: SkillMaterialType; amount: number } => {
+  if (nextLevel <= 3) {
+    return { material: 'spark', amount: 2 + nextLevel };
+  }
+  if (nextLevel <= 6) {
+    return { material: 'core', amount: 1 + (nextLevel - 3) };
+  }
+  return { material: 'prism', amount: 1 + (nextLevel - 6) };
+};
+
+export const levelUpSkill = (characterId: string, skillId: string): { success: boolean; error?: string } => {
+  const inventory = getCharacterInventory();
+  const characterIndex = inventory.characters.findIndex((c) => c.id === characterId);
+  if (characterIndex === -1) {
+    return { success: false, error: 'Character not found' };
+  }
+
+  const character = inventory.characters[characterIndex];
+  const maxSkillLevel = getMaxSkillLevel(character);
+  const currentLevel = getSkillLevel(character, skillId);
+
+  if (currentLevel >= maxSkillLevel) {
+    return { success: false, error: `Skill level capped at Lv.${maxSkillLevel} for current ascension` };
+  }
+
+  const nextLevel = currentLevel + 1;
+  const cost = getSkillUpgradeCost(nextLevel);
+  const materials = getSkillMaterialInventory();
+  if (materials[cost.material] < cost.amount) {
+    return { success: false, error: `Need ${cost.amount} ${SKILL_MATERIALS[cost.material].name}` };
+  }
+
+  const updatedMaterials: SkillMaterialInventory = {
+    ...materials,
+    [cost.material]: materials[cost.material] - cost.amount,
+  };
+  saveSkillMaterialInventory(updatedMaterials);
+
+  const updatedLevels = { ...(character.skillLevels ?? {}) };
+  updatedLevels[skillId] = nextLevel;
+  inventory.characters[characterIndex] = { ...character, skillLevels: updatedLevels };
+  saveCharacterInventory(inventory);
+
+  return { success: true };
 };
 
 // Get uncap material requirements for next ascension
@@ -452,11 +605,9 @@ export const gainCharacterExp = (characterId: string, expAmount: number) => {
   character.experience += expAmount;
 
   // Check for level up (respecting level cap)
-  let leveledUp = false;
   while (character.experience >= character.nextLevelExp && character.level < levelCap) {
     character.experience -= character.nextLevelExp;
     character.level += 1;
-    leveledUp = true;
     
     // Exp requirement increases each level
     const expIncrease = 50 * character.level; // Progressive increase

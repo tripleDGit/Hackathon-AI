@@ -65,7 +65,7 @@ export const generateMathQuestions = async (
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are a math teacher creating quiz questions. Always respond with valid JSON only, no additional text.',
+                        content: 'You are a quiz teacher creating mixed math and computer science questions. Always respond with valid JSON only, no additional text.',
                     },
                     {
                         role: 'user',
@@ -140,15 +140,25 @@ export const generateMathQuestions = async (
 
 const buildPrompt = (difficulty: Difficulty, count: number): string => {
     const difficultyDescriptions = {
-        [Difficulty.EASY]: 'simple addition and subtraction (single digit numbers)',
-        [Difficulty.MEDIUM]: 'multiplication, division, and multi-digit arithmetic',
-        [Difficulty.HARD]: 'complex problems with fractions, decimals, and multi-step operations',
+        [Difficulty.EASY]: 'simple mental math and basic CS concepts (bitwise operations, simple logic)',
+        [Difficulty.MEDIUM]: 'mixed math operations and intermediate CS concepts (time complexity, data structures)',
+        [Difficulty.HARD]: 'complex calculations, algorithms, and advanced CS theory questions',
     };
 
-    return `Generate ${count} math questions for ${difficulty} difficulty. 
-  Difficulty description: ${difficultyDescriptions[difficulty]}
+    const csGuidelines = {
+        [Difficulty.EASY]: `Examples: "What is 5 in binary?", "How many bits in a byte?", "What is 2^3?", "If x=3, what is x << 1?" (bitwise left shift by 1), "What is NOT(1010 in binary)?"`,
+        [Difficulty.MEDIUM]: `Examples: "How many elements in an array with indices 0-9?", "What is log2(8)?", "If you have 1000 items, how many passes for bubble sort worst case?", "What is the modulo of 17 % 5?"`,
+        [Difficulty.HARD]: `Examples: "What is 2^10?", "In binary, what is 1111 + 0001?", "If an algorithm is O(n^2) and n=1000, roughly how many operations?", "What is the XOR of 1010 and 0101 in binary?"`,
+    };
+
+    return `Generate exactly ${count} questions for ${difficulty} difficulty. Mix math and computer science questions (roughly 50/50 split).
   
-  Return a JSON array with this exact structure:
+  Difficulty description: ${difficultyDescriptions[difficulty]}
+  CS Question Guidelines: ${csGuidelines[difficulty]}
+  
+  Questions should be solvable in the head quickly (mental math/simple CS logic).
+  
+  Return ONLY a JSON array with this exact structure:
   [
     {
       "question": "What is 5 + 3?",
@@ -157,7 +167,7 @@ const buildPrompt = (difficulty: Difficulty, count: number): string => {
     }
   ]
   
-  Include 4 options for each question, with the correct answer among them. Mix up the position of correct answers.`;
+  Include 4 options for each question, with the correct answer among them. Mix up the position of correct answers. NO OTHER TEXT.`;
 };
 
 // Generate answer options around the correct answer

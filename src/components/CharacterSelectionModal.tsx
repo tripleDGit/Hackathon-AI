@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Character } from '@/types/character.types';
-import { getCharacterInventory, setActiveCharacter, getCharacterStats } from '@/services/character.service';
+import { getCharacterInventory, setActiveCharacter, getCharacterStats, getSkillLevel, getMaxSkillLevel } from '@/services/character.service';
 
 interface CharacterSelectionModalProps {
   onClose: () => void;
@@ -11,6 +11,8 @@ interface CharacterSelectionModalProps {
 const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClose, onCharacterChange, onOpenBookUI }) => {
   const inventory = getCharacterInventory();
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
+  const selectedSkills = selectedCharacter?.skills ?? [];
+  const maxSkillLevel = selectedCharacter ? getMaxSkillLevel(selectedCharacter) : 1;
 
   const handleCharacterClick = (character: Character) => {
     setSelectedCharacter(character);
@@ -211,11 +213,11 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClo
                   </div>
 
                   {/* Skills Section */}
-                  {selectedCharacter.skills && selectedCharacter.skills.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="text-lg font-bold text-gray-800 mb-3">🎯 Skills</h4>
+                  <div className="mb-6">
+                    <h4 className="text-lg font-bold text-gray-800 mb-3">🎯 Skills</h4>
+                    {selectedSkills.length > 0 ? (
                       <div className="space-y-3">
-                        {selectedCharacter.skills.map((skill) => (
+                        {selectedSkills.map((skill) => (
                           <div key={skill.id} className={`rounded-xl p-4 border-2 ${
                             skill.type === 'passive' 
                               ? 'bg-gray-50 border-gray-300' 
@@ -234,15 +236,17 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClo
                                   ? 'bg-gray-300 text-gray-700' 
                                   : 'bg-yellow-300 text-yellow-700'
                               }`}>
-                                {skill.type === 'passive' ? '∞ Passive' : '⚡ Active'}
+                                {skill.type === 'passive' ? '∞ Passive' : '⚡ Active'} · Lv.{getSkillLevel(selectedCharacter, skill.id)}/{maxSkillLevel}
                               </span>
                             </div>
                             <div className="text-sm text-gray-700 italic ml-11">{skill.effect}</div>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="text-sm text-gray-500 italic">No skills unlocked yet.</div>
+                    )}
+                  </div>
 
                   {/* Action Buttons */}
                   <div className="flex gap-3">

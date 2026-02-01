@@ -6,6 +6,7 @@ import CharacterDisplay from './CharacterDisplay';
 import GachaPullUI from './GachaPullUI';
 import CharacterSelectionModal from './CharacterSelectionModal';
 import BookUsageUI from './BookUsageUI';
+import DungeonModal from './DungeonModal';
 import { loadUserProgress } from '@/services/missions.service';
 import { getActiveCharacter, getGachaCurrency, fixStuckCharacterLevels } from '@/services/character.service';
 import { getProgression, isBossLevel } from '@/services/progression.service';
@@ -20,6 +21,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ onStartGame, isLoading }) => {
     const [showGacha, setShowGacha] = useState(false);
     const [showCharacterSelection, setShowCharacterSelection] = useState(false);
     const [showBookUI, setShowBookUI] = useState(false);
+    const [showDungeon, setShowDungeon] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [bookCharacter, setBookCharacter] = useState<Character | null>(null);
     const [activeCharacter, setActiveCharacter] = useState(getActiveCharacter());
@@ -92,6 +94,9 @@ const StartMenu: React.FC<StartMenuProps> = ({ onStartGame, isLoading }) => {
                     onCharacterChange={handleCharacterUpdate}
                     onOpenBookUI={handleOpenBookUI}
                 />
+            )}
+            {showDungeon && (
+                <DungeonModal onClose={() => setShowDungeon(false)} />
             )}
 
             {/* Settings Modal */}
@@ -249,6 +254,15 @@ const StartMenu: React.FC<StartMenuProps> = ({ onStartGame, isLoading }) => {
                                 >
                                     <span className="text-xl">📋</span>
                                     Daily Missions
+                                </button>
+
+                                {/* Dungeon Button */}
+                                <button
+                                    onClick={() => setShowDungeon(true)}
+                                    className="w-full py-3 rounded-lg font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-all duration-200 flex items-center justify-center gap-2"
+                                >
+                                    <span className="text-xl">🏰</span>
+                                    Material Dungeon
                                 </button>
 
                                 {/* Settings Button */}
