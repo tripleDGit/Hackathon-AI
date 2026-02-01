@@ -1,6 +1,7 @@
 import { SkillMaterialType, UncapMaterialType } from '@/types/character.types';
-import { DungeonDifficulty, DungeonRunResult, DungeonType } from '@/types/dungeon.types';
-import { addSkillMaterials, addUncapMaterial } from '@/services/character.service';
+import { DungeonDifficulty, DungeonRunResult, DungeonType, SharedRewardType } from '@/types/dungeon.types';
+import { addBooks, addSkillMaterials, addUncapMaterial } from '@/services/character.service';
+import { addPoints } from '@/services/missions.service';
 import { getProgression } from '@/services/progression.service';
 import { spendEnergy } from '@/services/energy.service';
 
@@ -42,7 +43,7 @@ export const getDungeonEnergyCost = (difficulty: DungeonDifficulty): number => {
 export const runDungeon = (
   type: DungeonType,
   difficulty: DungeonDifficulty,
-  material: SkillMaterialType | UncapMaterialType
+  material: SkillMaterialType | UncapMaterialType | SharedRewardType
 ): { success: boolean; error?: string; result?: DungeonRunResult } => {
   if (!isDungeonDifficultyUnlocked(difficulty)) {
     return { success: false, error: 'Difficulty locked' };
@@ -66,6 +67,35 @@ export const runDungeon = (
         difficulty,
         energySpent: energyCost,
         skillMaterials: { [material as SkillMaterialType]: amount },
+      },
+    };
+  }
+
+  if (type === 'shared') {
+    if (material === 'points') {
+      const points = amount * 10;
+      addPoints(points);
+      return {
+        success: true,
+        result: {
+          type,
+          difficulty,
+          energySpent: energyCost,
+          pointsReward: points,
+        },
+      };
+    }
+
+    const bookTier = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
+    const bookCount = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 1 : 2;
+    addBooks(bookTier, bookCount);
+    return {
+      success: true,
+      result: {
+        type,
+        difficulty,
+        energySpent: energyCost,
+        booksReward: { [bookTier]: bookCount },
       },
     };
   }

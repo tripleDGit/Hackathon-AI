@@ -1,3 +1,5 @@
+import { isDevModeEnabled } from '@/services/devMode.service';
+
 const ENERGY_KEY = 'energy_state';
 
 const MAX_ENERGY = 120;
@@ -17,6 +19,12 @@ const getInitialEnergyState = (): EnergyState => ({
 const applyRegen = (state: EnergyState): EnergyState => {
   const now = Date.now();
   const elapsedMinutes = Math.floor((now - state.lastUpdated) / (1000 * 60));
+  if (elapsedMinutes < 0) {
+    return {
+      energy: state.energy,
+      lastUpdated: now,
+    };
+  }
   if (elapsedMinutes < REGEN_INTERVAL_MINUTES) {
     return state;
   }
@@ -38,6 +46,12 @@ const applyRegen = (state: EnergyState): EnergyState => {
 };
 
 export const getEnergyState = (): EnergyState => {
+  if (isDevModeEnabled()) {
+    return {
+      energy: MAX_ENERGY,
+      lastUpdated: Date.now(),
+    };
+  }
   const stored = localStorage.getItem(ENERGY_KEY);
   const baseState: EnergyState = stored ? JSON.parse(stored) : getInitialEnergyState();
   const updated = applyRegen(baseState);
@@ -53,6 +67,9 @@ export const saveEnergyState = (state: EnergyState) => {
 
 export const spendEnergy = (amount: number): { success: boolean; state: EnergyState; error?: string } => {
   const state = getEnergyState();
+  if (isDevModeEnabled()) {
+    return { success: true, state };
+  }
   if (state.energy < amount) {
     return { success: false, state, error: 'Not enough energy' };
   }
@@ -66,6 +83,14 @@ export const spendEnergy = (amount: number): { success: boolean; state: EnergySt
 };
 
 export const addEnergy = (amount: number) => {
+  if (isDevModeEnabled()) {
+    const updated: EnergyState = {
+      energy: MAX_ENERGY,
+      lastUpdated: Date.now(),
+    };
+    saveEnergyState(updated);
+    return updated;
+  }
   const state = getEnergyState();
   const updated: EnergyState = {
     energy: Math.min(MAX_ENERGY, state.energy + amount),

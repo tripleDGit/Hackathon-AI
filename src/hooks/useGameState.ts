@@ -44,7 +44,7 @@ export const useGameState = () => {
             console.log('[GameState] Difficulty:', currentDifficulty);
             
             // Generate initial batch of questions based on progression difficulty
-            const initialBatchSize = 5;
+            const initialBatchSize = 12;
             console.log('[GameState] Generating questions...');
             const generatedQuestions = await generateMathQuestions(
                 currentDifficulty,
@@ -97,6 +97,9 @@ export const useGameState = () => {
             selectedAnswer,
             isCorrect,
             timeSpent,
+            question: currentQuestion.question,
+            correctAnswer: currentQuestion.correctAnswer,
+            explanation: currentQuestion.explanation,
         };
 
         setAnswers((prev) => [...prev, newAnswer]);
@@ -131,7 +134,7 @@ export const useGameState = () => {
             try {
                 const progression = getProgression();
                 const currentDifficulty = getDifficultyForLevel(progression.currentLevel);
-                const moreQuestions = await generateMathQuestions(currentDifficulty, 5);
+                const moreQuestions = await generateMathQuestions(currentDifficulty, 10);
                 setQuestions((prev) => [...prev, ...moreQuestions]);
                 setCurrentQuestionIndex(nextIndex);
                 setIsSubmitting(false);

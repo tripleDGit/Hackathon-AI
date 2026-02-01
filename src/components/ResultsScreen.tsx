@@ -4,6 +4,7 @@ import { addGamePointsAsGems, addBooks, addPrimogems } from '@/services/characte
 import { advanceLevel } from '@/services/progression.service';
 import { calculateBattleRewards } from '@/services/battle.service';
 import { useEffect, useState } from 'react';
+import MathRenderer from './MathRenderer';
 
 interface ResultsScreenProps {
     results: GameResults;
@@ -285,26 +286,44 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                 )}
 
                 {/* Question Review */}
-                <div className="mb-8 max-h-64 overflow-y-auto">
+                <div className="mb-8 max-h-96 overflow-y-auto">
                     <h3 className="font-semibold text-gray-800 mb-3">Question Review</h3>
                     <div className="space-y-2">
                         {results.answers.map((answer, index) => (
                             <div
                                 key={answer.questionId}
-                                className={`flex items-center justify-between p-3 rounded-lg ${answer.isCorrect ? 'bg-green-50' : 'bg-red-50'
-                                    }`}
+                                className={`rounded-lg overflow-hidden ${answer.isCorrect ? 'bg-green-50' : 'bg-red-50'}`}
                             >
-                                <span className="text-sm font-medium text-gray-700">
-                                    Question {index + 1}
-                                </span>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm text-gray-600">
-                                        {answer.timeSpent}s
+                                <div className="flex items-center justify-between p-3">
+                                    <span className="text-sm font-medium text-gray-700">
+                                        Question {index + 1}
                                     </span>
-                                    <span className="text-lg">
-                                        {answer.isCorrect ? '✅' : '❌'}
-                                    </span>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-sm text-gray-600">
+                                            {answer.timeSpent}s
+                                        </span>
+                                        <span className="text-lg">
+                                            {answer.isCorrect ? '✅' : '❌'}
+                                        </span>
+                                    </div>
                                 </div>
+                                {!answer.isCorrect && answer.question && (
+                                    <div className="px-3 pb-3 border-t border-red-200">
+                                        <div className="text-sm font-semibold text-gray-800 mb-2">
+                                            <MathRenderer content={answer.question} />
+                                        </div>
+                                        <p className="text-sm text-gray-700 bg-white p-2 rounded mb-2">
+                                            <span className="font-semibold">Correct Answer:</span>{' '}
+                                            <MathRenderer content={String(answer.correctAnswer)} />
+                                        </p>
+                                        {answer.explanation && (
+                                            <div className="text-sm text-gray-700 bg-blue-50 p-2 rounded">
+                                                <span className="font-semibold">💡 Explanation:</span>{' '}
+                                                <MathRenderer content={answer.explanation} />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>

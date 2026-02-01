@@ -3,6 +3,7 @@ import { MathQuestion } from '@/types/game.types';
 import { Character } from '@/types/character.types';
 import { BattleState, BattleAction } from '@/types/battle.types';
 import BattleDisplay from './BattleDisplay';
+import MathRenderer from './MathRenderer';
 
 interface QuestionDisplayProps {
     question: MathQuestion;
@@ -215,9 +216,9 @@ const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
                             {question.difficulty.toUpperCase()}
                         </span>
                     </div>
-                    <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
-                        {question.question}
-                    </h2>
+                    <div className="text-3xl font-bold text-center text-gray-800 mb-8">
+                        <MathRenderer content={question.question} />
+                    </div>
                 </div>
 
                 {/* Answer Options */}
@@ -231,7 +232,7 @@ const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
                                     : 'bg-gray-100 text-gray-800 hover:bg-gray-200 hover:scale-102'
                                 }`}
                         >
-                            {option}
+                            <MathRenderer content={String(option)} />
                         </button>
                     ))}
                 </div>

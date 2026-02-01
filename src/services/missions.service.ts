@@ -85,6 +85,13 @@ export const saveUserProgress = (progress: UserProgress): void => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
 };
 
+export const addPoints = (amount: number): UserProgress => {
+  const progress = loadUserProgress();
+  progress.totalPoints += amount;
+  saveUserProgress(progress);
+  return progress;
+};
+
 // Generate daily missions
 export const generateDailyMissions = (progress: UserProgress): Mission[] => {
   const missions: Mission[] = [

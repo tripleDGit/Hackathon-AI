@@ -16,6 +16,7 @@ export interface MathQuestion {
     correctAnswer: number;
     options: number[];
     difficulty: Difficulty;
+    explanation?: string;
 }
 
 export interface GameConfig {
@@ -29,6 +30,9 @@ export interface Answer {
     selectedAnswer: number;
     isCorrect: boolean;
     timeSpent: number;
+    question?: string;
+    correctAnswer?: number;
+    explanation?: string;
 }
 
 export interface GameResults {
@@ -43,4 +47,5 @@ export interface ApiQuestion {
     question: string;
     answer: number;
     options?: number[];
+    explanation?: string;
 }

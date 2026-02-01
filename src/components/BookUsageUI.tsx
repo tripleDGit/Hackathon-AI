@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Character, BookInventory, BookTier, BOOK_DATA, UncapMaterialInventory, UNCAP_MATERIALS, SkillMaterialInventory, SKILL_MATERIALS } from '@/types/character.types';
-import { useBook as applyBook, getBookInventory, isAtLevelCap, getLevelCap, getUncapRequirements, uncapCharacter, getUncapMaterialInventory, fixStuckCharacterLevels, getBookCost, getUncapCost, getSkillMaterialInventory, levelUpSkill, getSkillLevel, getMaxSkillLevel, getSkillUpgradeCost, getCharacterById } from '@/services/character.service';
+import { Character, BookInventory, BookTier, BOOK_DATA, UncapMaterialInventory, UNCAP_MATERIALS, SkillMaterialInventory, SKILL_MATERIALS, WEEKLY_BOSS_MATERIALS } from '@/types/character.types';
+import { useBook as applyBook, getBookInventory, isAtLevelCap, getLevelCap, getUncapRequirements, uncapCharacter, getUncapMaterialInventory, fixStuckCharacterLevels, getBookCost, getUncapCost, getSkillMaterialInventory, levelUpSkill, getSkillLevel, getMaxSkillLevel, getSkillUpgradeCost, getCharacterById, getWeeklyBossMaterialInventory } from '@/services/character.service';
 import { loadUserProgress } from '@/services/missions.service';
 
 interface BookUsageUIProps {
@@ -13,6 +13,7 @@ const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook
   const [bookInventory, setBookInventory] = useState<BookInventory>(getBookInventory());
   const [materialInventory, setMaterialInventory] = useState<UncapMaterialInventory>(getUncapMaterialInventory());
   const [skillMaterialInventory, setSkillMaterialInventory] = useState<SkillMaterialInventory>(getSkillMaterialInventory());
+  const [weeklyBossInventory, setWeeklyBossInventory] = useState(getWeeklyBossMaterialInventory());
   const [selectedTier, setSelectedTier] = useState<BookTier | null>(null);
   const [bookAmount, setBookAmount] = useState<number>(1);
   const [showAnimation, setShowAnimation] = useState(false);
@@ -164,6 +165,7 @@ const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook
     }
 
     setSkillMaterialInventory(getSkillMaterialInventory());
+    setWeeklyBossInventory(getWeeklyBossMaterialInventory());
   };
 
   const handleConfirmUpgrade = () => {
@@ -433,13 +435,27 @@ const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook
                 </div>
               </div>
 
+              {skillCharacter.skills.some((skill) => skill.requiredWeeklyMaterial) && (
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {(Object.keys(WEEKLY_BOSS_MATERIALS) as Array<keyof typeof WEEKLY_BOSS_MATERIALS>).map((key) => (
+                    <div key={key} className="bg-white rounded-lg p-2 text-center border border-orange-200">
+                      <div className="text-xl">{WEEKLY_BOSS_MATERIALS[key].icon}</div>
+                      <div className="text-sm font-bold text-orange-700">{weeklyBossInventory[key]}</div>
+                      <div className="text-[10px] text-gray-600">{WEEKLY_BOSS_MATERIALS[key].name}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="space-y-3">
                 {skillCharacter.skills.map((skill) => {
                   const currentLevel = getSkillLevel(skillCharacter, skill.id);
                   const nextLevel = currentLevel + 1;
                   const isMaxed = currentLevel >= maxSkillLevel;
-                  const cost = getSkillUpgradeCost(nextLevel);
-                  const hasMaterials = skillMaterialInventory[cost.material] >= cost.amount;
+                  const cost = getSkillUpgradeCost(skill, nextLevel);
+                  const hasMaterials = cost.materialType === 'skill'
+                    ? skillMaterialInventory[cost.material] >= cost.amount
+                    : weeklyBossInventory[cost.material] >= cost.amount;
 
                   return (
                     <div key={skill.id} className="bg-white rounded-lg p-3 border border-orange-200">
@@ -470,7 +486,9 @@ const BookUsageUI: React.FC<BookUsageUIProps> = ({ character, onClose, onUseBook
                         <div className="mt-2 text-xs text-gray-600 flex items-center gap-2">
                           <span>Cost:</span>
                           <span className="font-semibold text-orange-700">
-                            {SKILL_MATERIALS[cost.material].icon} {cost.amount} {SKILL_MATERIALS[cost.material].name}
+                            {cost.materialType === 'skill'
+                              ? `${SKILL_MATERIALS[cost.material].icon} ${cost.amount} ${SKILL_MATERIALS[cost.material].name}`
+                              : `${WEEKLY_BOSS_MATERIALS[cost.material].icon} ${cost.amount} ${WEEKLY_BOSS_MATERIALS[cost.material].name}`}
                           </span>
                         </div>
                       )}

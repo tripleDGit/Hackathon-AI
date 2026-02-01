@@ -8,6 +8,7 @@ export interface Skill {
   icon: string;
   type: 'active' | 'passive'; // active = special ability, passive = always active
   effect: string; // description of the effect
+  requiredWeeklyMaterial?: WeeklyBossMaterialType;
 }
 
 export interface Character {
@@ -29,6 +30,8 @@ export interface Character {
   uncapMaterial: UncapMaterialType; // which material this character needs
   skills?: Skill[]; // optional character skills
   skillLevels?: Record<string, number>; // per-skill level tracking
+  constellationLevel: number; // 0-6 constellation unlocks
+  baseCharacterId?: string; // original character template ID for identifying duplicates
 }
 
 export interface CharacterInventory {
@@ -51,13 +54,38 @@ export interface GachaPool {
 export interface GachaResult {
   character: Character;
   isNew: boolean; // true if first time pulling this character
-  duplicateCount: number; // how many times this character was already owned
+  isDuplicate: boolean; // true if duplicate (converted to constellation)
+  constellationItem?: string; // constellation item name if duplicate
+}
+
+export interface GachaBanner {
+  id: 'standard' | 'limited';
+  name: string;
+  description: string;
+  rates: {
+    fiveStarRate: number;
+    fourStarRate: number;
+    threeStarRate: number;
+  };
+  featuredCharacterId?: string;
+  endDate?: string; // ISO string for limited banners
+}
+
+export interface GachaHistoryEntry {
+  id: string;
+  timestamp: number;
+  bannerId: GachaBanner['id'];
+  characterId: string;
+  characterName: string;
+  rarity: Rarity;
+  isNew: boolean;
 }
 
 export interface GachaCurrency {
   primogems: number; // premium currency (paid)
   freeGems: number; // free currency (earned from game)
   wishes: number; // gacha tickets
+  constellationDust: number; // dust from excess constellation items
 }
 
 export type BookTier = 1 | 2 | 3;
@@ -129,6 +157,34 @@ export interface SkillMaterialInventory {
   prism: number;
 }
 
+export type SkillUpgradeCost =
+  | { materialType: 'skill'; material: SkillMaterialType; amount: number }
+  | { materialType: 'weekly'; material: WeeklyBossMaterialType; amount: number };
+
+// Weekly Boss Materials
+export type WeeklyBossMaterialType = 'sigil' | 'memory' | 'crown' | 'glyph';
+
+export interface WeeklyBossMaterial {
+  id: WeeklyBossMaterialType;
+  name: string;
+  icon: string;
+  description: string;
+}
+
+export const WEEKLY_BOSS_MATERIALS: Record<WeeklyBossMaterialType, WeeklyBossMaterial> = {
+  sigil: { id: 'sigil', name: 'Boss Sigil', icon: '🪙', description: 'Mark of a fallen weekly boss' },
+  memory: { id: 'memory', name: 'Memory Shard', icon: '🧠', description: 'Fragment of a perfected memory' },
+  crown: { id: 'crown', name: 'Crown of Will', icon: '👑', description: 'Rare proof of mastery' },
+  glyph: { id: 'glyph', name: 'Block Glyph', icon: '🧩', description: 'Rune left by shattered blocks' },
+};
+
+export interface WeeklyBossMaterialInventory {
+  sigil: number;
+  memory: number;
+  crown: number;
+  glyph: number;
+}
+
 // Character Skills Database
 export const CHARACTER_SKILLS: Record<string, Skill[]> = {
   'mathematica': [
@@ -143,10 +199,70 @@ export const CHARACTER_SKILLS: Record<string, Skill[]> = {
     {
       id: 'formula_strike',
       name: 'Formula Strike',
-      description: 'A powerful calculated attack',
+      description: 'Unleash calculated power',
       icon: '⚡',
       type: 'active',
-      effect: 'Deal 1.5x damage to a single enemy. Cooldown: 2 turns',
+      effect: 'Grants focus on Memory bosses. Deals 15 damage on Block Blast. (3x per fight)',
+    },
+  ],
+  'memoria': [
+    {
+      id: 'grid_focus',
+      name: 'Grid Focus',
+      description: 'Master of visual recall',
+      icon: '🧠',
+      type: 'passive',
+      effect: 'Counters the Memory Grid boss with heightened recall.',
+      requiredWeeklyMaterial: 'memory',
+    },
+    {
+      id: 'pattern_lock',
+      name: 'Pattern Lock',
+      description: 'Lock in 3 tiles automatically',
+      icon: '🧩',
+      type: 'active',
+      effect: 'Automatically solves 3 tiles in Memory Grid. (1x per fight)',
+      requiredWeeklyMaterial: 'memory',
+    },
+  ],
+  'sequenzia': [
+    {
+      id: 'sequence_mastery',
+      name: 'Sequence Mastery',
+      description: 'Exceptional at numeric sequences',
+      icon: '🔢',
+      type: 'passive',
+      effect: 'Counters the Memory Sequence boss with sharper recall.',
+      requiredWeeklyMaterial: 'crown',
+    },
+    {
+      id: 'echo_chain',
+      name: 'Echo Chain',
+      description: 'Automatically repeat 2 numbers',
+      icon: '🔗',
+      type: 'active',
+      effect: 'Automatically inputs 2 correct numbers in Memory Sequence. (1x per fight)',
+      requiredWeeklyMaterial: 'crown',
+    },
+  ],
+  'blocksmith': [
+    {
+      id: 'blast_planner',
+      name: 'Blast Planner',
+      description: 'Strategic block placement expert',
+      icon: '🧱',
+      type: 'passive',
+      effect: 'Counters the Block Blast boss with smart placement.',
+      requiredWeeklyMaterial: 'glyph',
+    },
+    {
+      id: 'chain_reactor',
+      name: 'Chain Reactor',
+      description: 'Unleash 20 bonus damage',
+      icon: '💥',
+      type: 'active',
+      effect: 'Deals 20 bonus damage in Block Blast. (1x per fight)',
+      requiredWeeklyMaterial: 'glyph',
     },
   ],
 };

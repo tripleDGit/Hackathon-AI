@@ -1,5 +1,7 @@
-import { Character, CharacterInventory, GachaResult, Rarity, GachaCurrency, BookInventory, BookTier, BOOK_DATA, UncapMaterialType, UncapMaterialInventory, CHARACTER_SKILLS, SkillMaterialInventory, SkillMaterialType, SKILL_MATERIALS, Skill } from '@/types/character.types';
+import { Character, CharacterInventory, GachaResult, Rarity, GachaCurrency, BookInventory, BookTier, BOOK_DATA, UncapMaterialType, UncapMaterialInventory, CHARACTER_SKILLS, SkillMaterialInventory, SkillMaterialType, SKILL_MATERIALS, Skill, WeeklyBossMaterialInventory, WeeklyBossMaterialType, SkillUpgradeCost, WEEKLY_BOSS_MATERIALS, GachaBanner, GachaHistoryEntry } from '@/types/character.types';
+import { ConstellationItemInventory, CHARACTER_CONSTELLATIONS } from '@/types/constellation.types';
 import { loadUserProgress, saveUserProgress } from '@/services/missions.service';
+import { isDevModeEnabled } from '@/services/devMode.service';
 
 const getSkillKeyFromName = (name: string) =>
   name
@@ -33,26 +35,43 @@ const ensureSkillLevels = (character: Character, skills: Skill[]): { character: 
 const hydrateInventorySkills = (inventory: CharacterInventory): { inventory: CharacterInventory; updated: boolean } => {
   let updated = false;
   const characters = inventory.characters.map((character) => {
-    if (character.skills && character.skills.length > 0) {
-      const ensured = ensureSkillLevels(character, character.skills);
+    let char = character;
+    
+    // Ensure constellation level exists
+    if (char.constellationLevel === undefined) {
+      char = { ...char, constellationLevel: 0 };
+      updated = true;
+    }
+    
+    // Ensure baseCharacterId exists for older characters
+    if (!char.baseCharacterId && char.id.includes('_')) {
+      const parts = char.id.split('_');
+      if (parts.length >= 2) {
+        char = { ...char, baseCharacterId: `${parts[0]}_${parts[1]}` };
+        updated = true;
+      }
+    }
+    
+    if (char.skills && char.skills.length > 0) {
+      const ensured = ensureSkillLevels(char, char.skills);
       if (ensured.updated) {
         updated = true;
       }
       return ensured.character;
     }
 
-    const skillKey = getSkillKeyFromName(character.name);
+    const skillKey = getSkillKeyFromName(char.name);
     const skills = CHARACTER_SKILLS[skillKey];
     if (skills) {
       updated = true;
-      const ensured = ensureSkillLevels({ ...character, skills }, skills);
+      const ensured = ensureSkillLevels({ ...char, skills }, skills);
       if (ensured.updated) {
         updated = true;
       }
       return ensured.character;
     }
 
-    return character;
+    return char;
   });
 
   if (!updated) {
@@ -61,6 +80,64 @@ const hydrateInventorySkills = (inventory: CharacterInventory): { inventory: Cha
 
   return { inventory: { ...inventory, characters }, updated };
 };
+
+// Dev-exclusive characters (not in regular gacha pool)
+const DEV_CHARACTER_POOL: Character[] = [
+  {
+    id: 'char_007',
+    name: 'Memoria',
+    rarity: '⭐⭐⭐⭐⭐',
+    level: 1,
+    ascensionLevel: 0,
+    experience: 0,
+    nextLevelExp: 1000,
+    baseHP: 240,
+    baseAttack: 32,
+    baseDefense: 28,
+    baseSpeed: 34,
+    icon: '🧠',
+    description: 'Master of visual recall. Excels against Memory Grid bosses.',
+    favorability: 0,
+    uncapMaterial: 'essence',
+    skills: CHARACTER_SKILLS['memoria'],
+  },
+  {
+    id: 'char_008',
+    name: 'Sequenzia',
+    rarity: '⭐⭐⭐⭐⭐',
+    level: 1,
+    ascensionLevel: 0,
+    experience: 0,
+    nextLevelExp: 1000,
+    baseHP: 235,
+    baseAttack: 34,
+    baseDefense: 26,
+    baseSpeed: 36,
+    icon: '🔢',
+    description: 'Sequence savant. Dominates Memory Sequence bosses.',
+    favorability: 0,
+    uncapMaterial: 'fragment',
+    skills: CHARACTER_SKILLS['sequenzia'],
+  },
+  {
+    id: 'char_009',
+    name: 'Blocksmith',
+    rarity: '⭐⭐⭐⭐⭐',
+    level: 1,
+    ascensionLevel: 0,
+    experience: 0,
+    nextLevelExp: 1000,
+    baseHP: 250,
+    baseAttack: 30,
+    baseDefense: 30,
+    baseSpeed: 28,
+    icon: '🧩',
+    description: 'Block strategist. Built to counter Block Blast bosses.',
+    favorability: 0,
+    uncapMaterial: 'tome',
+    skills: CHARACTER_SKILLS['blocksmith'],
+  },
+];
 
 // Template characters for gacha pool
 const CHARACTER_POOL: Character[] = [
@@ -77,7 +154,7 @@ const CHARACTER_POOL: Character[] = [
     baseDefense: 25,
     baseSpeed: 30,
     icon: '🧙‍♀️',
-    spriteUrl: '/characters/mathematica.png',
+    spriteUrl: 'https://images.unsplash.com/photo-1509869175650-a1d97972541a?w=400&h=400&fit=crop',
     description: 'Master of Mathematics. Expert in solving complex equations.',
     favorability: 0,
     uncapMaterial: 'crystal',
@@ -177,34 +254,233 @@ const GACHA_RATES = {
   threeStarRate: 0.87, // 87%
 };
 
+const FEATURED_FIVE_STAR_SHARE = 0.5; // 50% of 5★ pulls go to featured
+const GACHA_HISTORY_KEY = 'gacha_history';
+const MAX_GACHA_HISTORY = 200;
+
+const GACHA_BANNERS: GachaBanner[] = [
+  {
+    id: 'standard',
+    name: 'Standard Banner',
+    description: 'Permanent wish pool with core characters.',
+    rates: GACHA_RATES,
+  },
+  {
+    id: 'limited',
+    name: 'Limited-Time Banner',
+    description: 'Features a special 5★ with boosted chance.',
+    rates: GACHA_RATES,
+    featuredCharacterId: 'char_007',
+    endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString(),
+  },
+];
+
+export const getGachaBanners = (): GachaBanner[] => GACHA_BANNERS;
+
+export const getGachaHistory = (): GachaHistoryEntry[] => {
+  const stored = localStorage.getItem(GACHA_HISTORY_KEY);
+  if (!stored) return [];
+  try {
+    return JSON.parse(stored) as GachaHistoryEntry[];
+  } catch {
+    return [];
+  }
+};
+
+const saveGachaHistory = (history: GachaHistoryEntry[]) => {
+  localStorage.setItem(GACHA_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_GACHA_HISTORY)));
+};
+
+const addGachaHistoryEntry = (entry: GachaHistoryEntry) => {
+  const history = getGachaHistory();
+  history.unshift(entry);
+  saveGachaHistory(history);
+};
+
+const getBannerById = (bannerId: GachaBanner['id']): GachaBanner => {
+  return GACHA_BANNERS.find((b) => b.id === bannerId) ?? GACHA_BANNERS[0];
+};
+
+const getBannerPool = (bannerId: GachaBanner['id']): Character[] => {
+  if (bannerId === 'limited') {
+    const featured = DEV_CHARACTER_POOL.find((c) => c.id === 'char_007');
+    return featured ? [...CHARACTER_POOL, featured] : CHARACTER_POOL;
+  }
+  return CHARACTER_POOL;
+};
+
+export const getBannerPoolInfo = (bannerId: GachaBanner['id']) => {
+  const banner = getBannerById(bannerId);
+  const pool = getBannerPool(bannerId);
+
+  const fiveStars = pool.filter((c) => c.rarity === '⭐⭐⭐⭐⭐');
+  const fourStars = pool.filter((c) => c.rarity === '⭐⭐⭐⭐');
+  const threeStars = pool.filter((c) => c.rarity === '⭐⭐⭐' || c.rarity === '⭐⭐' || c.rarity === '⭐');
+
+  const fiveStarRate = banner.rates.fiveStarRate;
+  const fourStarRate = banner.rates.fourStarRate;
+  const threeStarRate = banner.rates.threeStarRate;
+
+  const featuredId = banner.featuredCharacterId;
+  const featuredFiveStarChance = featuredId ? fiveStarRate * FEATURED_FIVE_STAR_SHARE : 0;
+  const nonFeaturedFiveStarChance = featuredId && fiveStars.length > 1
+    ? (fiveStarRate - featuredFiveStarChance) / (fiveStars.length - 1)
+    : fiveStars.length > 0
+      ? fiveStarRate / fiveStars.length
+      : 0;
+
+  const perFourStarChance = fourStars.length > 0 ? fourStarRate / fourStars.length : 0;
+  const perThreeStarChance = threeStars.length > 0 ? threeStarRate / threeStars.length : 0;
+
+  const characters = pool.map((c) => {
+    if (c.rarity === '⭐⭐⭐⭐⭐') {
+      const isFeatured = featuredId === c.id;
+      return {
+        ...c,
+        chance: isFeatured ? featuredFiveStarChance : nonFeaturedFiveStarChance,
+        isFeatured,
+      };
+    }
+    if (c.rarity === '⭐⭐⭐⭐') {
+      return { ...c, chance: perFourStarChance, isFeatured: false };
+    }
+    return { ...c, chance: perThreeStarChance, isFeatured: false };
+  });
+
+  return { banner, characters };
+};
+
 export const getCharacterInventory = (): CharacterInventory => {
   const stored = localStorage.getItem('character_inventory');
   if (stored) {
     const parsed: CharacterInventory = JSON.parse(stored);
     const hydrated = hydrateInventorySkills(parsed);
-    if (hydrated.updated) {
-      saveCharacterInventory(hydrated.inventory);
+    let nextInventory = hydrated.inventory;
+
+    if (isDevModeEnabled()) {
+      const ensured = ensureDevModeCharacters(nextInventory);
+      nextInventory = ensured.inventory;
+      if (ensured.updated) {
+        saveCharacterInventory(nextInventory);
+      }
+    } else if (hydrated.updated) {
+      saveCharacterInventory(nextInventory);
     }
-    return hydrated.inventory;
+
+    return nextInventory;
   }
 
   // Initialize with starter character (Mathematica with sprite)
   const starterChar: Character = {
     ...CHARACTER_POOL[0], // Mathematica instead of Novice Student
     id: `starter_${Date.now()}`,
+    constellationLevel: 0,
+    baseCharacterId: CHARACTER_POOL[0].id,
   };
 
-  const inventory: CharacterInventory = {
+  let inventory: CharacterInventory = {
     characters: [starterChar],
     activeCharacterId: starterChar.id,
   };
+
+  if (isDevModeEnabled()) {
+    inventory = ensureDevModeCharacters(inventory).inventory;
+  }
 
   saveCharacterInventory(inventory);
   return inventory;
 };
 
+const ensureDevModeCharacters = (inventory: CharacterInventory): { inventory: CharacterInventory; updated: boolean } => {
+  const devIds = new Set(['char_007', 'char_008', 'char_009']);
+  const existingIds = new Set(inventory.characters.map((c) => c.baseCharacterId || c.id));
+  const additions = DEV_CHARACTER_POOL.filter((character) => devIds.has(character.id) && !existingIds.has(character.id));
+
+  if (additions.length === 0) {
+    return { inventory, updated: false };
+  }
+
+  const timestamp = Date.now();
+  const enhanced = additions.map((character, index) => ({
+    ...character,
+    id: `${character.id}_${timestamp}_${index}`,
+    constellationLevel: 0,
+    baseCharacterId: character.id,
+  }));
+
+  return {
+    inventory: {
+      ...inventory,
+      characters: [...inventory.characters, ...enhanced],
+    },
+    updated: true,
+  };
+};
+
 export const saveCharacterInventory = (inventory: CharacterInventory) => {
   localStorage.setItem('character_inventory', JSON.stringify(inventory));
+};
+
+// Cleanup function to remove duplicate characters and convert to constellation items
+export const cleanupDuplicateCharacters = (): { removed: number; itemsAdded: number } => {
+  const inventory = getCharacterInventory();
+  const constInventory = getConstellationItemInventory();
+  
+  // Group characters by their base ID (name as fallback)
+  const characterMap = new Map<string, Character[]>();
+  
+  inventory.characters.forEach(char => {
+    const baseId = char.baseCharacterId || char.id.split('_').slice(0, 2).join('_') || char.name;
+    const existing = characterMap.get(baseId) || [];
+    existing.push(char);
+    characterMap.set(baseId, existing);
+  });
+  
+  // Keep only one character per base ID, convert others to constellation items
+  const uniqueCharacters: Character[] = [];
+  let removedCount = 0;
+  let itemsAddedCount = 0;
+  
+  characterMap.forEach((chars, baseId) => {
+    if (chars.length === 1) {
+      uniqueCharacters.push(chars[0]);
+      return;
+    }
+    
+    // Keep the character with highest level/constellation/favorability
+    const best = chars.reduce((prev, current) => {
+      if (current.level > prev.level) return current;
+      if (current.level === prev.level && current.constellationLevel > prev.constellationLevel) return current;
+      if (current.level === prev.level && current.constellationLevel === prev.constellationLevel && current.favorability > prev.favorability) return current;
+      return prev;
+    });
+    
+    uniqueCharacters.push(best);
+    
+    // Convert duplicates to constellation items
+    const duplicateCount = chars.length - 1;
+    removedCount += duplicateCount;
+    itemsAddedCount += duplicateCount;
+    
+    // Add constellation items for each duplicate
+    const actualBaseId = best.baseCharacterId || best.id.split('_').slice(0, 2).join('_');
+    constInventory[actualBaseId] = (constInventory[actualBaseId] || 0) + duplicateCount;
+  });
+  
+  // Update inventories
+  inventory.characters = uniqueCharacters;
+  
+  // If active character was removed, set first character as active
+  if (!inventory.characters.find(c => c.id === inventory.activeCharacterId)) {
+    if (inventory.characters.length > 0) {
+      inventory.activeCharacterId = inventory.characters[0].id;
+    }
+  }
+  
+  saveCharacterInventory(inventory);
+  saveConstellationItemInventory(constInventory);
+  
+  return { removed: removedCount, itemsAdded: itemsAddedCount };
 };
 
 export const getGachaCurrency = (): GachaCurrency => {
@@ -217,6 +493,7 @@ export const getGachaCurrency = (): GachaCurrency => {
     primogems: 0,
     freeGems: 300, // Starting gems from game points
     wishes: 0,
+    constellationDust: 0,
   };
 
   saveGachaCurrency(currency);
@@ -225,6 +502,164 @@ export const getGachaCurrency = (): GachaCurrency => {
 
 export const saveGachaCurrency = (currency: GachaCurrency) => {
   localStorage.setItem('gacha_currency', JSON.stringify(currency));
+};
+
+// Constellation Item Inventory
+export const getConstellationItemInventory = (): ConstellationItemInventory => {
+  const stored = localStorage.getItem('constellation_item_inventory');
+  if (stored) {
+    return JSON.parse(stored);
+  }
+  return {};
+};
+
+export const saveConstellationItemInventory = (inventory: ConstellationItemInventory) => {
+  localStorage.setItem('constellation_item_inventory', JSON.stringify(inventory));
+};
+
+export const addConstellationItem = (baseCharacterId: string, amount: number = 1) => {
+  const inventory = getConstellationItemInventory();
+  const charInventory = getCharacterInventory();
+  
+  // Check if character exists and is at C6
+  const character = charInventory.characters.find(c => 
+    (c.baseCharacterId || c.id) === baseCharacterId
+  );
+  
+  if (character && character.constellationLevel >= 6) {
+    // Convert to dust instead
+    const currency = getGachaCurrency();
+    const dustValue = 10; // Each excess constellation item = 10 dust
+    currency.constellationDust = (currency.constellationDust || 0) + (dustValue * amount);
+    saveGachaCurrency(currency);
+    return;
+  }
+  
+  inventory[baseCharacterId] = (inventory[baseCharacterId] || 0) + amount;
+  saveConstellationItemInventory(inventory);
+};
+
+export const useConstellationItem = (characterId: string): { success: boolean; error?: string } => {
+  const charInventory = getCharacterInventory();
+  const character = charInventory.characters.find(c => c.id === characterId);
+  
+  if (!character) {
+    return { success: false, error: 'Character not found' };
+  }
+
+  const baseId = character.baseCharacterId || character.id;
+  const constInventory = getConstellationItemInventory();
+  
+  if (!constInventory[baseId] || constInventory[baseId] <= 0) {
+    return { success: false, error: 'No constellation items available' };
+  }
+
+  if (character.constellationLevel >= 6) {
+    return { success: false, error: 'Maximum constellation level reached' };
+  }
+
+  // Use the item
+  constInventory[baseId] -= 1;
+  saveConstellationItemInventory(constInventory);
+
+  // Upgrade constellation
+  character.constellationLevel += 1;
+  saveCharacterInventory(charInventory);
+
+  return { success: true };
+};
+
+// Convert constellation items to dust for C6 characters
+export const convertConstellationItemToDust = (baseCharacterId: string, amount: number = 1): { success: boolean; dustGained: number } => {
+  const constInventory = getConstellationItemInventory();
+  
+  if (!constInventory[baseCharacterId] || constInventory[baseCharacterId] < amount) {
+    return { success: false, dustGained: 0 };
+  }
+  
+  // Remove items
+  constInventory[baseCharacterId] -= amount;
+  if (constInventory[baseCharacterId] <= 0) {
+    delete constInventory[baseCharacterId];
+  }
+  saveConstellationItemInventory(constInventory);
+  
+  // Add dust
+  const currency = getGachaCurrency();
+  const dustValue = 10; // Each constellation item = 10 dust
+  const dustGained = dustValue * amount;
+  currency.constellationDust = (currency.constellationDust || 0) + dustGained;
+  saveGachaCurrency(currency);
+  
+  return { success: true, dustGained };
+};
+
+// Get constellation bonus multipliers
+export const getConstellationBonuses = (character: Character): {
+  hpMultiplier: number;
+  attackMultiplier: number;
+  defenseMultiplier: number;
+  speedMultiplier: number;
+  skillLevelBonus: number;
+} => {
+  const baseId = character.baseCharacterId || character.id;
+  const constellations = CHARACTER_CONSTELLATIONS[baseId];
+  
+  if (!constellations || character.constellationLevel === 0) {
+    return { hpMultiplier: 1, attackMultiplier: 1, defenseMultiplier: 1, speedMultiplier: 1, skillLevelBonus: 0 };
+  }
+
+  let hpBonus = 0;
+  let attackBonus = 0;
+  let defenseBonus = 0;
+  let speedBonus = 0;
+  let skillLevelBonus = 0;
+
+  // Apply bonuses from unlocked constellations
+  for (let i = 0; i < character.constellationLevel; i++) {
+    const perk = constellations[i];
+    if (!perk) continue;
+
+    // Parse effect to determine bonuses
+    if (perk.effect.includes('HP')) {
+      const match = perk.effect.match(/\+(\d+)%\s+HP/);
+      if (match) hpBonus += parseInt(match[1]) / 100;
+    }
+    if (perk.effect.includes('Attack') || perk.effect.includes('ATK')) {
+      const match = perk.effect.match(/\+(\d+)%\s+(Attack|ATK)/);
+      if (match) attackBonus += parseInt(match[1]) / 100;
+    }
+    if (perk.effect.includes('Defense') || perk.effect.includes('DEF')) {
+      const match = perk.effect.match(/\+(\d+)%\s+(Defense|DEF)/);
+      if (match) defenseBonus += parseInt(match[1]) / 100;
+    }
+    if (perk.effect.includes('Speed') || perk.effect.includes('SPD')) {
+      const match = perk.effect.match(/\+(\d+)%\s+(Speed|SPD)/);
+      if (match) speedBonus += parseInt(match[1]) / 100;
+    }
+    if (perk.effect.includes('All stats') || perk.effect.includes('All Stats')) {
+      const match = perk.effect.match(/\+(\d+)%\s+All\s+[Ss]tats/);
+      if (match) {
+        const bonus = parseInt(match[1]) / 100;
+        hpBonus += bonus;
+        attackBonus += bonus;
+        defenseBonus += bonus;
+        speedBonus += bonus;
+      }
+    }
+    if (perk.effect.includes('Skill levels')) {
+      const match = perk.effect.match(/\+(\d+)\s+Skill\s+levels/);
+      if (match) skillLevelBonus += parseInt(match[1]);
+    }
+  }
+
+  return {
+    hpMultiplier: 1 + hpBonus,
+    attackMultiplier: 1 + attackBonus,
+    defenseMultiplier: 1 + defenseBonus,
+    speedMultiplier: 1 + speedBonus,
+    skillLevelBonus,
+  };
 };
 
 // Skill material inventory management
@@ -256,6 +691,33 @@ export const addSkillMaterials = (materials: Partial<SkillMaterialInventory>) =>
     prism: inventory.prism + (materials.prism ?? 0),
   };
   saveSkillMaterialInventory(updated);
+};
+
+export const getWeeklyBossMaterialInventory = (): WeeklyBossMaterialInventory => {
+  const stored = localStorage.getItem('weekly_boss_material_inventory');
+  if (stored) {
+    return JSON.parse(stored) as WeeklyBossMaterialInventory;
+  }
+
+  const inventory: WeeklyBossMaterialInventory = {
+    sigil: 0,
+    memory: 0,
+    crown: 0,
+    glyph: 0,
+  };
+
+  saveWeeklyBossMaterialInventory(inventory);
+  return inventory;
+};
+
+export const saveWeeklyBossMaterialInventory = (inventory: WeeklyBossMaterialInventory) => {
+  localStorage.setItem('weekly_boss_material_inventory', JSON.stringify(inventory));
+};
+
+export const addWeeklyBossMaterial = (material: WeeklyBossMaterialType, amount: number) => {
+  const inventory = getWeeklyBossMaterialInventory();
+  inventory[material] += amount;
+  saveWeeklyBossMaterialInventory(inventory);
 };
 
 // Add premium currency (primogems)
@@ -331,14 +793,26 @@ export const getSkillLevel = (character: Character, skillId: string): number => 
   return character.skillLevels?.[skillId] ?? 1;
 };
 
-export const getSkillUpgradeCost = (nextLevel: number): { material: SkillMaterialType; amount: number } => {
-  if (nextLevel <= 3) {
-    return { material: 'spark', amount: 2 + nextLevel };
+export const getSkillUpgradeCost = (skill: Skill, nextLevel: number): SkillUpgradeCost => {
+  let amount = 1;
+  if (nextLevel === 10) {
+    amount = 2;
+  } else if (nextLevel === 9) {
+    amount = 1;
+  } else if (nextLevel <= 3) {
+    amount = 2 + nextLevel;
+  } else if (nextLevel <= 6) {
+    amount = 1 + (nextLevel - 3);
+  } else {
+    amount = 1 + (nextLevel - 6);
   }
-  if (nextLevel <= 6) {
-    return { material: 'core', amount: 1 + (nextLevel - 3) };
+
+  if (skill.requiredWeeklyMaterial) {
+    return { materialType: 'weekly', material: skill.requiredWeeklyMaterial, amount };
   }
-  return { material: 'prism', amount: 1 + (nextLevel - 6) };
+
+  const material: SkillMaterialType = nextLevel <= 3 ? 'spark' : nextLevel <= 6 ? 'core' : 'prism';
+  return { materialType: 'skill', material, amount };
 };
 
 export const levelUpSkill = (characterId: string, skillId: string): { success: boolean; error?: string } => {
@@ -351,23 +825,36 @@ export const levelUpSkill = (characterId: string, skillId: string): { success: b
   const character = inventory.characters[characterIndex];
   const maxSkillLevel = getMaxSkillLevel(character);
   const currentLevel = getSkillLevel(character, skillId);
+  const skill = character.skills?.find((entry) => entry.id === skillId);
+  if (!skill) {
+    return { success: false, error: 'Skill not found' };
+  }
 
   if (currentLevel >= maxSkillLevel) {
     return { success: false, error: `Skill level capped at Lv.${maxSkillLevel} for current ascension` };
   }
 
   const nextLevel = currentLevel + 1;
-  const cost = getSkillUpgradeCost(nextLevel);
-  const materials = getSkillMaterialInventory();
-  if (materials[cost.material] < cost.amount) {
-    return { success: false, error: `Need ${cost.amount} ${SKILL_MATERIALS[cost.material].name}` };
-  }
+  const cost = getSkillUpgradeCost(skill, nextLevel);
+  if (cost.materialType === 'skill') {
+    const materials = getSkillMaterialInventory();
+    if (materials[cost.material] < cost.amount) {
+      return { success: false, error: `Need ${cost.amount} ${SKILL_MATERIALS[cost.material].name}` };
+    }
 
-  const updatedMaterials: SkillMaterialInventory = {
-    ...materials,
-    [cost.material]: materials[cost.material] - cost.amount,
-  };
-  saveSkillMaterialInventory(updatedMaterials);
+    const updatedMaterials: SkillMaterialInventory = {
+      ...materials,
+      [cost.material]: materials[cost.material] - cost.amount,
+    };
+    saveSkillMaterialInventory(updatedMaterials);
+  } else {
+    const weeklyMaterials = getWeeklyBossMaterialInventory();
+    if (weeklyMaterials[cost.material] < cost.amount) {
+      return { success: false, error: `Need ${cost.amount} ${WEEKLY_BOSS_MATERIALS[cost.material].name}` };
+    }
+    weeklyMaterials[cost.material] -= cost.amount;
+    saveWeeklyBossMaterialInventory(weeklyMaterials);
+  }
 
   const updatedLevels = { ...(character.skillLevels ?? {}) };
   updatedLevels[skillId] = nextLevel;
@@ -462,6 +949,48 @@ export const addBooks = (tier: BookTier, count: number) => {
   saveBookInventory(inventory);
 };
 
+// Developer resource functions
+export const grantDevResources = (type: 'books' | 'gems' | 'materials' | 'all') => {
+  if (type === 'books' || type === 'all') {
+    const inventory = getBookInventory();
+    inventory.tier1 += 50;
+    inventory.tier2 += 30;
+    inventory.tier3 += 15;
+    saveBookInventory(inventory);
+  }
+  
+  if (type === 'gems' || type === 'all') {
+    const currency = getGachaCurrency();
+    currency.freeGems += 5000;
+    currency.primogems += 1000;
+    currency.wishes += 10;
+    saveGachaCurrency(currency);
+  }
+  
+  if (type === 'materials' || type === 'all') {
+    const skillMaterials = getSkillMaterialInventory();
+    skillMaterials.spark += 100;
+    skillMaterials.core += 50;
+    skillMaterials.prism += 25;
+    saveSkillMaterialInventory(skillMaterials);
+    
+    const uncapMaterials = getUncapMaterialInventory();
+    uncapMaterials.crystal += 50;
+    uncapMaterials.essence += 50;
+    uncapMaterials.fragment += 50;
+    uncapMaterials.tome += 50;
+    uncapMaterials.rune += 50;
+    saveUncapMaterialInventory(uncapMaterials);
+    
+    const weeklyMaterials = getWeeklyBossMaterialInventory();
+    weeklyMaterials.sigil += 20;
+    weeklyMaterials.memory += 20;
+    weeklyMaterials.crown += 20;
+    weeklyMaterials.glyph += 20;
+    saveWeeklyBossMaterialInventory(weeklyMaterials);
+  }
+};
+
 // Get book cost in points
 export const getBookCost = (bookTier: BookTier): number => {
   if (bookTier === 1) return 10;  // Basic book: 10 points
@@ -528,8 +1057,14 @@ export const addGamePointsAsGems = (points: number) => {
 
 // Perform a single gacha pull
 export const performGachaPull = (): GachaResult => {
+  return performGachaPullForBanner('standard');
+};
+
+export const performGachaPullForBanner = (bannerId: GachaBanner['id']): GachaResult => {
   const currency = getGachaCurrency();
   const inventory = getCharacterInventory();
+  const banner = getBannerById(bannerId);
+  const pool = getBannerPool(bannerId);
 
   // Cost: 160 gems per pull (or 1 wish if you have it)
   if (currency.freeGems < 160 && currency.wishes === 0) {
@@ -546,48 +1081,82 @@ export const performGachaPull = (): GachaResult => {
   const rng = Math.random();
   let selectedRarity: Rarity;
 
-  if (rng < GACHA_RATES.fiveStarRate) {
+  if (rng < banner.rates.fiveStarRate) {
     selectedRarity = '⭐⭐⭐⭐⭐';
-  } else if (rng < GACHA_RATES.fiveStarRate + GACHA_RATES.fourStarRate) {
+  } else if (rng < banner.rates.fiveStarRate + banner.rates.fourStarRate) {
     selectedRarity = '⭐⭐⭐⭐';
   } else {
     selectedRarity = '⭐⭐⭐';
   }
 
-  // Get random character from selected rarity tier
-  const availableCharacters = CHARACTER_POOL.filter(c => c.rarity === selectedRarity);
-  const pulledCharTemplate = availableCharacters[Math.floor(Math.random() * availableCharacters.length)];
+  // Get random character from selected rarity tier (with featured boost)
+  let pulledCharTemplate: Character | undefined;
+  const availableCharacters = pool.filter(c => c.rarity === selectedRarity);
 
-  // Check if character already exists
-  const existingCharacter = inventory.characters.find(c => c.id === pulledCharTemplate.id);
+  if (selectedRarity === '⭐⭐⭐⭐⭐' && banner.featuredCharacterId) {
+    const featured = availableCharacters.find(c => c.id === banner.featuredCharacterId);
+    const nonFeatured = availableCharacters.filter(c => c.id !== banner.featuredCharacterId);
+    if (featured && Math.random() < FEATURED_FIVE_STAR_SHARE) {
+      pulledCharTemplate = featured;
+    } else if (nonFeatured.length > 0) {
+      pulledCharTemplate = nonFeatured[Math.floor(Math.random() * nonFeatured.length)];
+    }
+  }
+
+  if (!pulledCharTemplate) {
+    pulledCharTemplate = availableCharacters[Math.floor(Math.random() * availableCharacters.length)];
+  }
+
+  // Check if character already exists (by baseCharacterId)
+  const existingCharacter = inventory.characters.find(c => 
+    (c.baseCharacterId || c.id) === pulledCharTemplate.id
+  );
   const isNew = !existingCharacter;
-  const duplicateCount = existingCharacter ? 1 : 0;
+  const isDuplicate = !!existingCharacter;
+
+  let resultCharacter: Character;
+  let constellationItem: string | undefined;
 
   if (isNew) {
     // New character - add to inventory
     const newCharacter: Character = {
       ...pulledCharTemplate,
-      id: `${pulledCharTemplate.id}_${inventory.characters.length}`,
+      id: `${pulledCharTemplate.id}_${Date.now()}`,
+      constellationLevel: 0,
+      baseCharacterId: pulledCharTemplate.id,
     };
     inventory.characters.push(newCharacter);
+    resultCharacter = newCharacter;
     
     // Set as active if this is the first character
     if (inventory.characters.length === 1) {
       inventory.activeCharacterId = newCharacter.id;
     }
   } else {
-    // Duplicate - increase level
-    existingCharacter.level += 1;
-    existingCharacter.favorability += 10;
+    // Duplicate - convert to constellation item
+    addConstellationItem(pulledCharTemplate.id, 1);
+    resultCharacter = existingCharacter;
+    constellationItem = `${pulledCharTemplate.name}'s Constellation`;
   }
 
   saveCharacterInventory(inventory);
   saveGachaCurrency(currency);
 
-  return {
-    character: isNew ? { ...pulledCharTemplate, id: `${pulledCharTemplate.id}_${inventory.characters.length - 1}` } : existingCharacter!,
+  addGachaHistoryEntry({
+    id: `pull_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: Date.now(),
+    bannerId,
+    characterId: pulledCharTemplate.id,
+    characterName: pulledCharTemplate.name,
+    rarity: pulledCharTemplate.rarity,
     isNew,
-    duplicateCount,
+  });
+
+  return {
+    character: resultCharacter,
+    isNew,
+    isDuplicate,
+    constellationItem,
   };
 };
 
@@ -678,11 +1247,13 @@ export const getCharacterById = (id: string): Character | undefined => {
 // Calculate character stats at current level
 export const getCharacterStats = (character: Character) => {
   const levelBonus = (character.level - 1) * 0.1; // 10% per level
+  const constBonuses = getConstellationBonuses(character);
+  
   return {
-    hp: Math.floor(character.baseHP * (1 + levelBonus)),
-    attack: Math.floor(character.baseAttack * (1 + levelBonus)),
-    defense: Math.floor(character.baseDefense * (1 + levelBonus)),
-    speed: Math.floor(character.baseSpeed * (1 + levelBonus)),
+    hp: Math.floor(character.baseHP * (1 + levelBonus) * constBonuses.hpMultiplier),
+    attack: Math.floor(character.baseAttack * (1 + levelBonus) * constBonuses.attackMultiplier),
+    defense: Math.floor(character.baseDefense * (1 + levelBonus) * constBonuses.defenseMultiplier),
+    speed: Math.floor(character.baseSpeed * (1 + levelBonus) * constBonuses.speedMultiplier),
   };
 };
 

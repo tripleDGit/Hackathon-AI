@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Character } from '@/types/character.types';
 import { getCharacterInventory, setActiveCharacter, getCharacterStats, getSkillLevel, getMaxSkillLevel } from '@/services/character.service';
+import ConstellationUI from './ConstellationUI';
 
 interface CharacterSelectionModalProps {
   onClose: () => void;
@@ -11,6 +12,7 @@ interface CharacterSelectionModalProps {
 const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClose, onCharacterChange, onOpenBookUI }) => {
   const inventory = getCharacterInventory();
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
+  const [showConstellation, setShowConstellation] = useState(false);
   const selectedSkills = selectedCharacter?.skills ?? [];
   const maxSkillLevel = selectedCharacter ? getMaxSkillLevel(selectedCharacter) : 1;
 
@@ -110,6 +112,9 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClo
                       <div className="text-xs font-semibold text-gray-800 truncate">{character.name}</div>
                       <div className="text-xs text-gray-500">Lv.{character.level}</div>
                       <div className="text-xs">{character.rarity}</div>
+                      {character.constellationLevel > 0 && (
+                        <div className="text-xs text-purple-600 font-bold">⭐C{character.constellationLevel}</div>
+                      )}
                     </button>
                   );
                 })}
@@ -142,6 +147,9 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClo
                           <div>
                             <h3 className="text-3xl font-bold text-gray-800">{selectedCharacter.name}</h3>
                             <p className="text-sm text-gray-600">{selectedCharacter.rarity}</p>
+                            {selectedCharacter.constellationLevel > 0 && (
+                              <p className="text-sm text-purple-600 font-bold mt-1">⭐ Constellation Level {selectedCharacter.constellationLevel}</p>
+                            )}
                           </div>
                           <div className="text-right">
                             <div className="text-4xl font-bold text-indigo-600">Lv.{selectedCharacter.level}</div>
@@ -217,31 +225,35 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClo
                     <h4 className="text-lg font-bold text-gray-800 mb-3">🎯 Skills</h4>
                     {selectedSkills.length > 0 ? (
                       <div className="space-y-3">
-                        {selectedSkills.map((skill) => (
-                          <div key={skill.id} className={`rounded-xl p-4 border-2 ${
-                            skill.type === 'passive' 
-                              ? 'bg-gray-50 border-gray-300' 
-                              : 'bg-yellow-50 border-yellow-300'
-                          }`}>
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex items-center gap-3">
-                                <span className="text-2xl">{skill.icon}</span>
-                                <div>
-                                  <div className="font-bold text-gray-800">{skill.name}</div>
-                                  <div className="text-xs text-gray-600">{skill.description}</div>
+                        {selectedSkills.map((skill) => {
+                          return (
+                            <div key={skill.id} className={`rounded-xl p-4 border-2 ${
+                              skill.type === 'passive' 
+                                ? 'bg-gray-50 border-gray-300' 
+                                : 'bg-yellow-50 border-yellow-300'
+                            }`}>
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex items-center gap-3 flex-1">
+                                  <span className="text-2xl">{skill.icon}</span>
+                                  <div>
+                                    <div className="font-bold text-gray-800">{skill.name}</div>
+                                    <div className="text-xs text-gray-600">{skill.description}</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                                    skill.type === 'passive' 
+                                      ? 'bg-gray-300 text-gray-700' 
+                                      : 'bg-yellow-300 text-yellow-700'
+                                  }`}>
+                                    {skill.type === 'passive' ? '∞ Passive' : '⚡ Active'} · Lv.{getSkillLevel(selectedCharacter, skill.id)}/{maxSkillLevel}
+                                  </span>
                                 </div>
                               </div>
-                              <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                                skill.type === 'passive' 
-                                  ? 'bg-gray-300 text-gray-700' 
-                                  : 'bg-yellow-300 text-yellow-700'
-                              }`}>
-                                {skill.type === 'passive' ? '∞ Passive' : '⚡ Active'} · Lv.{getSkillLevel(selectedCharacter, skill.id)}/{maxSkillLevel}
-                              </span>
+                              <div className="text-sm text-gray-700 italic ml-11">{skill.effect}</div>
                             </div>
-                            <div className="text-sm text-gray-700 italic ml-11">{skill.effect}</div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="text-sm text-gray-500 italic">No skills unlocked yet.</div>
@@ -249,10 +261,17 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClo
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 flex-wrap">
+                    <button
+                      onClick={() => setShowConstellation(true)}
+                      className="flex-1 min-w-[120px] bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200"
+                    >
+                      ⭐ Constellations
+                    </button>
+                    
                     <button
                       onClick={handleOpenBooks}
-                      className="flex-1 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200"
+                      className="flex-1 min-w-[120px] bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200"
                     >
                       📚 Use Training Books
                     </button>
@@ -260,7 +279,7 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClo
                     {selectedCharacter.id !== inventory.activeCharacterId && (
                       <button
                         onClick={() => handleSetActive(selectedCharacter.id)}
-                        className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200"
+                        className="flex-1 min-w-[120px] bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200"
                       >
                         ✓ Set as Active
                       </button>
@@ -278,6 +297,22 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({ onClo
             </div>
           </div>
         </div>
+
+        {/* Constellation Modal */}
+        {showConstellation && selectedCharacter && (
+          <ConstellationUI
+            character={selectedCharacter}
+            onClose={() => setShowConstellation(false)}
+            onUpdate={() => {
+              // Refresh inventory after constellation upgrade
+              const updated = getCharacterInventory();
+              const refreshed = updated.characters.find(c => c.id === selectedCharacter.id);
+              if (refreshed) {
+                setSelectedCharacter(refreshed);
+              }
+            }}
+          />
+        )}
       </div>
     </>
   );
